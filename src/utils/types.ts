@@ -2,77 +2,67 @@
  * Antigravity Quota Watcher - type definitions
  */
 
-export interface model_config {
-	label: string;
-	model_or_alias: {
-		model: string;
-	};
-	quota_info?: {
-		remaining_fraction?: number;
-		reset_time: string;
-	};
-	supports_images?: boolean;
-	is_recommended?: boolean;
-	allowed_tiers?: string[];
+/** Raw bucket item from RetrieveUserQuotaSummary response */
+export interface quota_bucket_raw {
+	bucketId?: string;
+	bucket_id?: string;
+	displayName?: string;
+	display_name?: string;
+	description?: string;
+	window?: string;
+	remainingFraction?: number;
+	remaining_fraction?: number;
+	resetTime?: string;
+	reset_time?: string;
 }
 
-export interface prompt_credits_info {
-	available: number;
-	monthly: number;
-	used_percentage: number;
-	remaining_percentage: number;
+/** Raw group item from RetrieveUserQuotaSummary response */
+export interface quota_group_raw {
+	displayName?: string;
+	display_name?: string;
+	description?: string;
+	buckets?: quota_bucket_raw[];
 }
 
-export interface model_quota_info {
-	label: string;
-	model_id: string;
+/** Complete server response structure for RetrieveUserQuotaSummary */
+export interface quota_summary_response {
+	response?: {
+		groups?: quota_group_raw[];
+		description?: string;
+	};
+}
+
+/** Parsed and enriched quota bucket */
+export interface quota_bucket {
+	bucket_id: string;
+	display_name: string;
+	description: string;
+	window: string;
+	group_name: string;
 	remaining_fraction?: number;
 	remaining_percentage?: number;
-	is_exhausted: boolean;
 	reset_time: Date;
 	time_until_reset: number;
 	time_until_reset_formatted: string;
+	reset_countdown: string;
+	reset_exact_time: string;
 }
 
+/** Parsed quota group containing its buckets */
+export interface quota_group {
+	display_name: string;
+	description: string;
+	buckets: quota_bucket[];
+}
+
+/** Snapshot containing all quota groups */
 export interface quota_snapshot {
 	timestamp: Date;
-	prompt_credits?: prompt_credits_info;
-	models: model_quota_info[];
+	groups: quota_group[];
 }
 
-export enum quota_level {
-	Normal = 'normal',
-	Warning = 'warning',
-	Critical = 'critical',
-	Depleted = 'depleted',
-}
-
-export type api_method_preference = 'COMMAND_MODEL_CONFIG' | 'GET_USER_STATUS';
-
+/** Extension runtime configuration */
 export interface config_options {
 	enabled: boolean;
 	polling_interval: number;
-	show_prompt_credits?: boolean;
-}
-
-// Server Response Types (Must match external API, usually camelCase or snake_case depending on proto to JSON mapping)
-// Based on previous code, it seems the server returns camelCase (e.g. `userStatus`, `planInfo`)
-export interface server_user_status_response {
-	userStatus: {
-		name: string;
-		email: string;
-		planStatus?: {
-			planInfo: {
-				teamsTier: string;
-				planName: string;
-				monthlyPromptCredits: number;
-				monthlyFlowCredits: number;
-			};
-			availablePromptCredits: number;
-			availableFlowCredits: number;
-		};
-		cascadeModelConfigData?: {
-			clientModelConfigs: any[]; // will map to model_config manually
-		};
-	};
 }

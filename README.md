@@ -1,118 +1,59 @@
-# Antigravity Quota Watcher
+# Antigravity Quota Plus
 
-A lightweight VS Code extension that monitors your Antigravity AI model usage quota and displays it in the status bar.
+轻量高效的 VS Code / Antigravity 扩展插件，用于在状态栏实时监控各大 AI 模型的 **5小时滑动配额** 与 **周配额** 剩余及刷新倒计时。
+---
 
+## 核心特性
+
+- **双限制精准追踪**：同时掌握 Gemini 与 Claude/GPT 模型的 **5-Hour 滑动限制** 与 **Weekly 周限制**。
+- **极简状态栏呈现**：采用优雅微标角标格式（如 `✦ 74%ʰ · 98%ʷ   ✺ 0%ʰ · 60%ʷ`），占用极低空间，周期与剩余比例一目了然。
+- **精致悬浮卡片**：鼠标悬停即浮现 Markdown 紧凑卡片，清晰展示各模型组的具体刷新倒计时与时刻点。
+- **自由交互菜单**：点击状态栏即可呼出极简菜单，通过几何方块（`▣` / `▢`）自由勾选需要固定的配额项。
+- **零配置即开即用**：自动探测 Antigravity 语言服务进程端口与认证凭据，无需任何手动配置。
+- **全平台支持**：支持 Linux、macOS 与 Windows。
 <img src="assets/modal.png" alt="drawing" width="500"/>
 <img src="assets/taskbar.png" alt="drawing" width="500"/>
+---
 
-## Installation (Github)
+## 安装方式
 
-1. Download the latest `.vsix` from the [Releases](https://github.com/Henrik-3/AntigravityQuota/releases/latest)
-2. In VS Code: `Extensions` → `...` → `Install from VSIX...`
-3. Restart VS Code / Antigravity
+### 方式 1：VS Code 扩展市场安装
+在 VS Code 或 Antigravity 扩展面板（`Ctrl+Shift+X`）搜索 **`Antigravity Quota Plus`**，点击安装即可。
 
-## Installation (Open VSX/Antigravity)
+### 方式 2：VSIX 本地安装
+1. 从 Release 页面下载最新的 `.vsix` 文件。
+2. 打开扩展面板 -> 点击右上角 `···` -> 选择 **“从 VSIX 安装... (Install from VSIX...)”**。
 
-1. Open Antigravity
-2. Open the Extensions view (`Ctrl+Shift+X`)
-3. Search for "Antigravity Quota (AGQ)"
-4. Click `Install`
+---
 
-## Features
+## 配置项
 
-### Real-Time Quota Monitoring
+在 VS Code 设置（`Ctrl+,`）中搜索 **AGQ** 进行个性化配置：
 
-- **Automatic detection** – Finds Antigravity's language server process, port, and auth token without manual setup
-- **Background polling** – Periodically fetches quota data to keep the status bar up-to-date
-- **Multi-model support** – Tracks quota usage for all available AI models (Gemini, Claude, GPT, etc.)
+| 配置项 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| `agq.enabled` | `true` | 是否启用自动配额监控 |
+| `agq.pollingInterval` | `120` | 后台轮询间隔时间（秒，最低 30s） |
+| `agq.pinnedBuckets` | `[]` | 状态栏显示的配额项 ID 列表（留空默认全部显示） |
 
-### Status Bar Integration
+---
 
-- Displays quota info directly in the VS Code status bar
-- Visual indicators:
-    - `$(check)` – Quota healthy (>20%)
-    - `$(warning)` – Quota low (<20%)
-    - `$(error)` – Quota exhausted
-- Click to open the interactive quota menu
-
-### Pinned Models
-
-- Pin your favorite models to the status bar for quick visibility
-- Toggle pinning from the interactive menu
-- When no models are pinned, displays "AGQ" as default
-
-### Interactive Quota Menu
-
-- View all models with progress bars and percentages
-- See time until quota reset for each model
-- View prompt credits (available/monthly)
-- Toggle model visibility directly from the menu
-
-### Cross-Platform Support
-
-- **Windows** – Full support using `wmic` for process detection
-- **macOS** – Unix-based detection strategy
-- **Linux** – Unix-based detection strategy
-
-## Commands
-
-| Command            | Description                 |
-| ------------------ | --------------------------- |
-| `AGQ: Refresh Now` | Manually refresh quota data |
-
-## Configuration
-
-Configure via VS Code Settings (`Ctrl+,`) under **AGQ**:
-
-| Setting               | Default | Description                                 |
-| --------------------- | ------- | ------------------------------------------- |
-| `agq.enabled`         | `true`  | Enable/disable quota monitoring             |
-| `agq.pollingInterval` | `120`   | Polling interval in seconds (min: 30s)      |
-| `agq.pinnedModels`    | `[]`    | Array of model IDs to display in status bar |
-
-## Building from Source
+## 本地编译与打包
 
 ```bash
-# Install dependencies
+# 安装依赖
 npm install
 
-# Compile TypeScript
+# 编译 TypeScript
 npm run compile
 
-# Package VSIX
+# 打包为 VSIX 安装包
 npm run node:vsix:package
 ```
 
-For Bun users:
+---
 
-```bash
-bun run bun:vsix:package
-```
+## 致谢与开源协议
 
-## Development
-
-```bash
-# Watch mode for development
-npm run watch
-
-# Lint
-npm run lint
-```
-
-## How It Works
-
-1. **Process Detection** – Scans for Antigravity's language server process and extracts connection parameters
-2. **Port Discovery** – Tests listening ports to find the correct API endpoint
-3. **Quota Fetching** – Calls `GetUserStatus` API to retrieve model quotas and prompt credits
-4. **UI Updates** – Parses the response and updates the status bar with formatted quota info
-
-## Disclaimer
-
-This extension was created by me and Gemini 3 Pro between some Rainbow Six Siege Games, therefore please do not expect the highest code quality in this repo (yet).
-Some parts of the code (and especially the knowledge of how this process works) are based on the [Antigravity Quota Watcher](https://github.com/wusimpl/AntigravityQuotaWatcher) project. Feel free to check it out and leave a star on their repo if you find this useful.
-
-This project isn't endorsed by Google and doesn't reflect the views or opinions of Google or anyone officially involved in producing or managing Google/AntiGravity properties
-
-## License
-
-[MIT License](LICENSE)
+- 本项目基于 [Henrik-3/AntigravityQuota](https://github.com/Henrik-3/AntigravityQuota) 深度增强重构。
+- 遵循 [MIT License](https://gitee.com/leocccc/antigravity-quota-plus/blob/main/LICENSE) 开源协议。

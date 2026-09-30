@@ -3,7 +3,7 @@
  */
 
 import * as https from 'https';
-import {quota_snapshot, model_quota_info, prompt_credits_info, server_user_status_response} from '../utils/types';
+import {quota_snapshot, quota_group, quota_bucket, quota_summary_response} from '../utils/types';
 import {logger} from '../utils/logger';
 
 export const RECONNECT_REQUIRED = 'RECONNECT_REQUIRED';
@@ -90,13 +90,16 @@ export class QuotaManager {
 
 	async fetch_quota() {
 		try {
-			const data = await this.request<server_user_status_response>('/exa.language_server_pb.LanguageServerService/GetUserStatus', {
-				metadata: {
-					ideName: 'antigravity',
-					extensionName: 'antigravity',
-					locale: 'en',
-				},
-			});
+			const data = await this.request<quota_summary_response>(
+				'/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary',
+				{
+					metadata: {
+						ideName: 'antigravity',
+						extensionName: 'antigravity',
+						locale: 'en',
+					},
+				}
+			);
 
 			const snapshot = this.parse_response(data);
 			this.consecutive_errors = 0;
@@ -123,90 +126,73 @@ export class QuotaManager {
 		}
 	}
 
-	private get_quota_info(model: any): any | undefined {
-		return model.quotaInfo ?? model.quota_info;
-	}
+	private parse_response(data: quota_summary_response): quota_snapshot {
+		const raw_groups = data.response?.groups || [];
+		const now = new Date();
 
-	private parse_response(data: server_user_status_response): quota_snapshot {
-		const user_status = data.userStatus;
-		const plan_info = user_status.planStatus?.planInfo;
-		const available_credits = user_status.planStatus?.availablePromptCredits;
+		const groups: quota_group[] = raw_groups.map(rg => {
+			const group_name = rg.displayName ?? rg.display_name ?? 'Unknown Group';
+			const group_desc = rg.description ?? '';
+			const raw_buckets = rg.buckets || [];
 
-		let prompt_credits: prompt_credits_info | undefined;
+			const buckets: quota_bucket[] = raw_buckets.map(b => {
+				const bucket_id = b.bucketId ?? b.bucket_id ?? 'unknown';
+				const display_name = b.displayName ?? b.display_name ?? bucket_id;
+				const description = b.description ?? '';
+				const window = b.window ?? '';
+				const remaining_fraction = b.remainingFraction ?? b.remaining_fraction;
+				const reset_time_raw = b.resetTime ?? b.reset_time;
+				const reset_time = reset_time_raw ? new Date(reset_time_raw) : new Date(0);
+				const diff = Math.max(0, reset_time.getTime() - now.getTime());
 
-		if (plan_info && available_credits !== undefined) {
-			const monthly = Number(plan_info.monthlyPromptCredits);
-			const available = Number(available_credits);
-			if (monthly > 0) {
-				prompt_credits = {
-					available,
-					monthly,
-					used_percentage: ((monthly - available) / monthly) * 100,
-					remaining_percentage: (available / monthly) * 100,
+				return {
+					bucket_id,
+					display_name,
+					description,
+					window,
+					group_name,
+					remaining_fraction,
+					remaining_percentage: remaining_fraction !== undefined ? remaining_fraction * 100 : undefined,
+					reset_time,
+					time_until_reset: diff,
+					reset_countdown: this.get_countdown(diff),
+					reset_exact_time: this.get_exact_time(reset_time),
+					time_until_reset_formatted: `${this.get_countdown(diff)} (${this.get_exact_time(reset_time)})`,
 				};
-			}
-		}
-
-		const raw_models = user_status.cascadeModelConfigData?.clientModelConfigs || [];
-
-		logger.debug('QuotaManager', 'Raw model configs:', {
-			total: raw_models.length,
-			with_quota: raw_models.filter((m: any) => this.get_quota_info(m)).length,
-			models: raw_models.map((m: any) => ({
-				label: m.label,
-				model_id: m.modelOrAlias?.model ?? m.model_or_alias?.model,
-				has_quota: !!this.get_quota_info(m),
-			})),
-		});
-
-		const models_without_quota = raw_models.filter((m: any) => !this.get_quota_info(m));
-		if (models_without_quota.length > 0) {
-			logger.warn(
-				'QuotaManager',
-				`${models_without_quota.length} model(s) missing quota info:`,
-				models_without_quota.map((m: any) => m.label)
-			);
-		}
-
-		const models: model_quota_info[] = raw_models.map((m: any) => {
-			const quota_info = this.get_quota_info(m);
-			const reset_time_raw = quota_info?.resetTime ?? quota_info?.reset_time;
-			const reset_time = reset_time_raw ? new Date(reset_time_raw) : new Date(0);
-			const now = new Date();
-			const diff = reset_time.getTime() - now.getTime();
-			const remaining_fraction = quota_info?.remainingFraction ?? quota_info?.remaining_fraction;
+			});
 
 			return {
-				label: m.label,
-				model_id: m.modelOrAlias?.model ?? m.model_or_alias?.model ?? 'unknown',
-				remaining_fraction,
-				remaining_percentage: remaining_fraction !== undefined ? remaining_fraction * 100 : undefined,
-				is_exhausted: remaining_fraction === 0,
-				reset_time: reset_time,
-				time_until_reset: quota_info ? diff : 0,
-				time_until_reset_formatted: quota_info ? this.format_time(diff, reset_time) : 'Unknown',
+				display_name: group_name,
+				description: group_desc,
+				buckets,
 			};
 		});
 
-		models.sort((a, b) => a.label.localeCompare(b.label));
+		logger.debug('QuotaManager', `Parsed ${groups.length} groups with ${groups.reduce((acc, g) => acc + g.buckets.length, 0)} total buckets`);
+
 		return {
-			timestamp: new Date(),
-			prompt_credits,
-			models,
+			timestamp: now,
+			groups,
 		};
 	}
 
-	private format_time(ms: number, reset_time: Date): string {
+	private get_countdown(ms: number): string {
 		if (ms <= 0) return 'Ready';
-		const mins = Math.ceil(ms / 60000);
-		let duration = '';
-		if (mins < 60) {
-			duration = `${mins}m`;
-		} else {
-			const hours = Math.floor(mins / 60);
-			duration = `${hours}h ${mins % 60}m`;
-		}
+		const total_mins = Math.ceil(ms / 60000);
+		const days = Math.floor(total_mins / (24 * 60));
+		const remaining_hours = Math.floor((total_mins % (24 * 60)) / 60);
+		const remaining_mins = total_mins % 60;
 
+		if (days > 0) {
+			return `${days}d ${remaining_hours}h`;
+		} else if (remaining_hours > 0) {
+			return `${remaining_hours}h ${remaining_mins}m`;
+		} else {
+			return `${remaining_mins}m`;
+		}
+	}
+
+	private get_exact_time(reset_time: Date): string {
 		const date_str = reset_time.toLocaleDateString(undefined, {
 			day: '2-digit',
 			month: '2-digit',
@@ -217,7 +203,6 @@ export class QuotaManager {
 			minute: '2-digit',
 			hour12: false,
 		});
-
-		return `${duration} (${date_str} ${time_str})`;
+		return `${date_str} ${time_str}`;
 	}
 }

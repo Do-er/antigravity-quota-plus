@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Antigravity Quota Watcher - Main Entry
  */
 
@@ -78,13 +78,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Setup Quota Manager Callbacks
 	quota_manager.on_update(snapshot => {
-		const current_config = config_manager.get_config();
 		logger.debug('Extension', 'Quota update received:', {
-			models_count: snapshot.models?.length ?? 0,
-			prompt_credits: snapshot.prompt_credits,
+			groups_count: snapshot.groups?.length ?? 0,
 			timestamp: snapshot.timestamp,
 		});
-		status_bar.update(snapshot, current_config.show_prompt_credits ?? false);
+		status_bar.update(snapshot);
 	});
 
 	quota_manager.on_error(err => {
