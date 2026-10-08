@@ -2,7 +2,7 @@
   "name": "antigravity-quota-plus",
   "displayName": "Antigravity Quota Plus",
   "description": "Monitor dual AI model quotas (5-Hour & Weekly limits) for Antigravity in the status bar",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "Doer",
   "icon": "assets/AntiGravityQuota.png",
   "engines": {
@@ -59,7 +59,7 @@
     }
   },
   "scripts": {
-    "node:vsix:package": "npm run compile && npx vsce package --baseImagesUrl https://gitee.com/leocccc/antigravity-quota-plus/raw/main --baseContentUrl https://gitee.com/leocccc/antigravity-quota-plus/blob/main --no-git-tag-version",
+    "node:vsix:package": "npm run compile && npx vsce package --baseImagesUrl https://raw.githubusercontent.com/Do-er/antigravity-quota-plus/main --baseContentUrl https://github.com/Do-er/antigravity-quota-plus/blob/main --no-git-tag-version",
     "bunx:vsix:package": "bun run compile && bunx vsce package --no-dependencies",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
@@ -77,7 +77,11 @@
   "dependencies": {},
   "repository": {
     "type": "git",
-    "url": "https://gitee.com/leocccc/antigravity-quota-plus.git"
+    "url": "https://github.com/Do-er/antigravity-quota-plus.git"
+  },
+  "homepage": "https://github.com/Do-er/antigravity-quota-plus#readme",
+  "bugs": {
+    "url": "https://github.com/Do-er/antigravity-quota-plus/issues"
   },
   "keywords": [
     "antigravity",
