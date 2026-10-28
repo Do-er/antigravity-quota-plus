@@ -14,7 +14,7 @@ class Logger {
 
 	init(context?: vscode.ExtensionContext) {
 		if (!this.output_channel) {
-			this.output_channel = vscode.window.createOutputChannel('Antigravity Quota');
+			this.output_channel = vscode.window.createOutputChannel('AGY Quota');
 			if (context) {
 				context.subscriptions.push(this.output_channel);
 			}

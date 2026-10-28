@@ -1,4 +1,4 @@
-# Antigravity Quota Plus
+# AGY Quota
 
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Do-er/antigravity-quota-plus/blob/main/LICENSE)
 [![VS Marketplace](https://vsmarketplacebadges.dev/version/Doer.antigravity-quota-plus.svg)](https://marketplace.visualstudio.com/items?itemName=Doer.antigravity-quota-plus)
@@ -39,7 +39,7 @@
 ## 安装方式
 
 ### 方式 1：VS Code 扩展市场安装
-在 VS Code 或 Antigravity 扩展面板（`Ctrl+Shift+X`）搜索 **`Antigravity Quota Plus`**，点击安装即可。
+在 VS Code 或 Antigravity 扩展面板（`Ctrl+Shift+X`）搜索 **`AGY Quota`**，点击安装即可。
 
 ### 方式 2：VSIX 本地安装
 1. 从 Release 页面下载最新的 `.vsix` 文件。

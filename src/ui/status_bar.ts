@@ -21,6 +21,13 @@ export class StatusBarManager {
 		this.item.show();
 	}
 
+	show_waiting() {
+		this.item.text = '$(sync~spin) 等待 AGY 就绪…';
+		this.item.tooltip = 'Waiting for the Antigravity (AGY) process to become ready...';
+		this.item.backgroundColor = undefined;
+		this.item.show();
+	}
+
 	show_error(msg: string) {
 		this.item.text = '$(error) AGQ';
 		this.item.tooltip = msg;
@@ -99,7 +106,7 @@ export class StatusBarManager {
 
 	show_menu() {
 		const pick = vscode.window.createQuickPick();
-		pick.title = 'Antigravity Quota Plus';
+		pick.title = 'AGY Quota';
 		(pick as any).hideInput = true;
 		pick.canSelectMany = false;
 

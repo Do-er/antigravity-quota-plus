@@ -16,6 +16,10 @@ let status_bar: StatusBarManager;
 let is_initialized = false;
 let is_reconnecting = false;
 
+const INIT_MAX_ATTEMPTS = 10;
+const INIT_RETRY_BASE_DELAY_MS = 1000;
+const INIT_RETRY_MAX_DELAY_MS = 10000;
+
 export async function activate(context: vscode.ExtensionContext) {
 	logger.init(context);
 	logger.section('Extension', 'Antigravity Quota Activating');
@@ -134,6 +138,28 @@ async function reconnect_extension() {
 	}
 }
 
+async function detect_process_with_retry() {
+	for (let attempt = 1; attempt <= INIT_MAX_ATTEMPTS; attempt++) {
+		const info = await process_finder.detect_process_info();
+
+		if (info) {
+			logger.info('Extension', `Process detected on attempt ${attempt}/${INIT_MAX_ATTEMPTS}`);
+			return info;
+		}
+
+		if (attempt < INIT_MAX_ATTEMPTS) {
+			const delay = Math.min(INIT_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1), INIT_RETRY_MAX_DELAY_MS);
+			logger.info(
+				'Extension',
+				`Process not ready yet (attempt ${attempt}/${INIT_MAX_ATTEMPTS}), retrying in ${delay}ms...`
+			);
+			await new Promise(r => setTimeout(r, delay));
+		}
+	}
+
+	return null;
+}
+
 async function initialize_extension() {
 	if (is_initialized) {
 		logger.debug('Extension', 'Already initialized, skipping');
@@ -144,11 +170,11 @@ async function initialize_extension() {
 	const timer = logger.time_start('initialize_extension');
 
 	const config = config_manager.get_config();
-	status_bar.show_loading();
+	status_bar.show_waiting();
 
 	try {
 		logger.info('Extension', 'Detecting Antigravity process...');
-		const process_info = await process_finder.detect_process_info();
+		const process_info = await detect_process_with_retry();
 
 		if (process_info) {
 			logger.info('Extension', 'Process found successfully', {
@@ -171,7 +197,7 @@ async function initialize_extension() {
 			logger.info('Extension', '   1. Make sure Antigravity extension is installed and enabled');
 			logger.info('Extension', '   2. Check if the language_server or agy process is running');
 			logger.info('Extension', '   3. Try reloading VS Code');
-			logger.info('Extension', '   4. Open "Output" panel and select "Antigravity Quota" for detailed logs');
+			logger.info('Extension', '   4. Open "Output" panel and select "AGY Quota" for detailed logs');
 
 			status_bar.show_error('Antigravity process not found');
 			vscode.window.showErrorMessage('Could not find Antigravity process. Is it running? Use "AGQ: Show Debug Log" to see details.', 'Show Logs').then(action => {
