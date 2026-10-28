@@ -22,23 +22,27 @@ const LOG_CAT = 'ProcessFinder';
 
 export class ProcessFinder {
 	private strategy: platform_strategy;
-	private process_name: string;
+	private process_names: string[];
 
 	constructor() {
 		logger.debug(LOG_CAT, `Initializing ProcessFinder for platform: ${process.platform}, arch: ${process.arch}`);
 
 		if (process.platform === 'win32') {
 			this.strategy = new WindowsStrategy();
-			this.process_name = `language_server_windows_${process.arch === 'arm64' ? 'arm' : 'x64'}.exe`;
+			this.process_names = [
+				`language_server_windows_${process.arch === 'arm64' ? 'arm' : 'x64'}.exe`,
+				// Antigravity 2.x replaced the bundled language server with the agy hub.
+				'agy.exe',
+			];
 		} else if (process.platform === 'darwin') {
 			this.strategy = new UnixStrategy('darwin');
-			this.process_name = `language_server_macos${process.arch === 'arm64' ? '_arm' : ''}`;
+			this.process_names = [`language_server_macos${process.arch === 'arm64' ? '_arm' : ''}`, 'agy'];
 		} else {
 			this.strategy = new UnixStrategy('linux');
-			this.process_name = `language_server_linux${process.arch === 'arm64' ? '_arm' : '_x64'}`;
+			this.process_names = [`language_server_linux${process.arch === 'arm64' ? '_arm' : '_x64'}`, 'agy'];
 		}
 
-		logger.info(LOG_CAT, `Target process name: ${this.process_name}`);
+		logger.info(LOG_CAT, `Target process names: ${this.process_names.join(', ')}`);
 	}
 
 	async detect_process_info(max_retries: number = 1): Promise<process_info | null> {
@@ -49,7 +53,7 @@ export class ProcessFinder {
 			logger.debug(LOG_CAT, `Attempt ${i + 1}/${max_retries}`);
 
 			try {
-				const cmd = this.strategy.get_process_list_command(this.process_name);
+				const cmd = this.strategy.get_process_list_command(this.process_names);
 				logger.debug(LOG_CAT, `Executing process list command:\n${cmd}`);
 
 				const {stdout, stderr} = await exec_async(cmd);
@@ -60,7 +64,18 @@ export class ProcessFinder {
 
 				logger.debug(LOG_CAT, `Raw stdout (${stdout.length} chars):\n${stdout}`);
 
-				const info = this.strategy.parse_process_info(stdout);
+				let info = this.strategy.parse_process_info(stdout);
+
+				if (!info) {
+					logger.debug(LOG_CAT, `Name match found nothing usable, trying command-line search...`);
+					const fallback_cmd = this.strategy.get_commandline_search_command();
+					logger.debug(LOG_CAT, `Executing command-line search:\n${fallback_cmd}`);
+
+					const fallback = await exec_async(fallback_cmd);
+					logger.debug(LOG_CAT, `Command-line search stdout (${fallback.stdout.length} chars):\n${fallback.stdout}`);
+
+					info = this.strategy.parse_process_info(fallback.stdout);
+				}
 
 				if (info) {
 					logger.info(LOG_CAT, `Process info parsed successfully:`, {
@@ -70,7 +85,7 @@ export class ProcessFinder {
 					});
 
 					logger.debug(LOG_CAT, `Getting listening ports for PID: ${info.pid}`);
-					const ports = await this.get_listening_ports(info.pid);
+					const ports = await this.get_listening_ports(info.pid, info.hint_ports);
 
 					logger.debug(LOG_CAT, `Found ${ports.length} listening port(s): [${ports.join(', ')}]`);
 
@@ -119,7 +134,7 @@ export class ProcessFinder {
 		return null;
 	}
 
-	private async get_listening_ports(pid: number): Promise<number[]> {
+	private async get_listening_ports(pid: number, hint_ports: number[] = []): Promise<number[]> {
 		try {
 			const cmd = this.strategy.get_port_list_command(pid);
 			logger.debug(LOG_CAT, `Port list command:\n${cmd}`);
@@ -135,13 +150,25 @@ export class ProcessFinder {
 			const ports = this.strategy.parse_listening_ports(stdout, pid);
 			logger.debug(LOG_CAT, `Parsed ports: [${ports.join(', ')}]`);
 
+			// Merge ports advertised on the command line — the OS lookup can miss them
+			// (permissions, IPv6-only binds) and older agy builds only expose these.
+			for (const port of hint_ports) {
+				if (!ports.includes(port)) {
+					ports.push(port);
+				}
+			}
+			if (hint_ports.length > 0) {
+				logger.debug(LOG_CAT, `Ports after adding command-line hints: [${ports.join(', ')}]`);
+			}
+
 			return ports;
 		} catch (e: any) {
 			logger.error(LOG_CAT, `Failed to get listening ports:`, {
 				message: e.message,
 				code: e.code,
 			});
-			return [];
+			// Still worth probing the advertised ports even if the OS query failed.
+			return [...hint_ports];
 		}
 	}
 
