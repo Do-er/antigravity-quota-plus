@@ -184,9 +184,9 @@ export class QuotaManager {
 		const remaining_mins = total_mins % 60;
 
 		if (days > 0) {
-			return `${days}d ${remaining_hours}h`;
+			return `${days}d${remaining_hours}h`;
 		} else if (remaining_hours > 0) {
-			return `${remaining_hours}h ${remaining_mins}m`;
+			return `${remaining_hours}h${remaining_mins}m`;
 		} else {
 			return `${remaining_mins}m`;
 		}

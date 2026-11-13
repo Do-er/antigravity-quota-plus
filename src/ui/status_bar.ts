@@ -42,7 +42,7 @@ export class StatusBarManager {
 		const group_parts: string[] = [];
 
 		for (const group of snapshot.groups) {
-			const group_prefix = group.display_name.toLowerCase().includes('gemini') ? '✦' : '✺';
+			const group_prefix = this.get_group_prefix(group.display_name);
 			const active_buckets = pinned.length > 0
 				? group.buckets.filter(b => pinned.includes(b.bucket_id))
 				: group.buckets;
@@ -51,11 +51,7 @@ export class StatusBarManager {
 				continue;
 			}
 
-			// Sort so 5-hour comes before weekly
-			const sorted_buckets = [...active_buckets].sort((a, b) => {
-				const order = (win: string) => (win === '5h' ? 0 : 1);
-				return order(a.window) - order(b.window);
-			});
+			const sorted_buckets = this.sort_buckets(active_buckets);
 
 			const bucket_texts = sorted_buckets.map(b => {
 				const sup_tag = b.window === 'weekly' ? 'ʷ' : 'ʰ';
@@ -79,23 +75,21 @@ export class StatusBarManager {
 		md.isTrusted = true;
 		md.supportThemeIcons = true;
 
+		const visible_groups = pinned.length > 0
+			? snapshot.groups.filter(g => g.buckets.some(b => pinned.includes(b.bucket_id)))
+			: snapshot.groups;
+
 		const sections: string[] = [];
-		for (const group of snapshot.groups) {
-			const group_title = group.display_name.replace(/\bmodels\b/i, 'Models');
-			const lines = [`**${group_title}**`];
+		for (const group of visible_groups) {
+			const group_prefix = this.get_group_prefix(group.display_name);
+			const lines = [`| ${group_prefix} **${group.display_name}** | |`, '| :--- | ---: |'];
 
-			const sorted_buckets = [...group.buckets].sort((a, b) => {
-				const order = (win: string) => (win === '5h' ? 0 : 1);
-				return order(a.window) - order(b.window);
-			});
-
-			for (const b of sorted_buckets) {
-				const label = b.window === 'weekly' ? 'Weekly' : '5-Hour';
+			for (const b of this.sort_buckets(group.buckets)) {
+				const label = this.format_window_label(b.window);
 				const pct = b.remaining_percentage !== undefined ? `${b.remaining_percentage.toFixed(1)}%` : 'N/A';
-				const compact_time = this.format_compact_time(b.reset_time);
-				lines.push(`• ${label}: **${pct}** · ${b.reset_countdown} (${compact_time})`);
+				lines.push(`| ${label} **${pct}** | ${b.reset_countdown} |`);
 			}
-			sections.push(lines.join('  \n'));
+			sections.push(lines.join('\n'));
 		}
 
 		md.appendMarkdown(sections.join('\n\n'));
@@ -177,18 +171,19 @@ export class StatusBarManager {
 					kind: vscode.QuickPickItemKind.Separator,
 				});
 
-				for (const b of group.buckets) {
+				for (const b of this.sort_buckets(group.buckets)) {
 					const pct = b.remaining_percentage;
 					const pct_display = pct !== undefined ? `${pct.toFixed(1)}%` : 'N/A';
 					const bar = pct !== undefined ? this.draw_progress_bar(pct) : '░'.repeat(10);
 					const is_pinned = pinned.length > 0 ? pinned.includes(b.bucket_id) : true;
 
 					const symbol = is_pinned ? '▣' : '▢';
+					const label = this.format_window_label(b.window);
 
 					const item: vscode.QuickPickItem & {bucket_id?: string} = {
-						label: `${symbol}  ${b.display_name}`,
+						label: `${symbol}  ${label}`,
 						description: `${bar} ${pct_display}`,
-						detail: `    Reset: ${b.reset_exact_time}  —   ${b.reset_countdown}`,
+						detail: `   ${b.reset_countdown} · ${this.format_menu_time(b.reset_time)}`,
 					};
 
 					(item as any).bucket_id = b.bucket_id;
@@ -212,19 +207,29 @@ export class StatusBarManager {
 		return '▓'.repeat(filled) + '░'.repeat(empty);
 	}
 
-	private format_compact_time(date: Date): string {
-		const now = new Date();
-		const is_today = date.toDateString() === now.toDateString();
+	private get_group_prefix(display_name: string): string {
+		return display_name.toLowerCase().includes('gemini') ? '✦' : '✺';
+	}
+
+	private sort_buckets(buckets: quota_bucket[]): quota_bucket[] {
+		const order = (win: string) => (win === '5h' ? 0 : win === 'weekly' ? 1 : 2);
+		return [...buckets].sort((a, b) => order(a.window) - order(b.window));
+	}
+
+	private format_window_label(win: string): string {
+		if (win === 'weekly') return '周';
+		if (win === '5h') return '5H';
+		return win || 'Other';
+	}
+
+	private format_menu_time(date: Date): string {
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const day = String(date.getDate()).padStart(2, '0');
 		const time_str = date.toLocaleTimeString(undefined, {
 			hour: '2-digit',
 			minute: '2-digit',
 			hour12: false,
 		});
-		if (is_today) {
-			return time_str;
-		}
-		const month = String(date.getMonth() + 1).padStart(2, '0');
-		const day = String(date.getDate()).padStart(2, '0');
 		return `${month}/${day} ${time_str}`;
 	}
 
