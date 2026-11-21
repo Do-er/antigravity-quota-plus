@@ -2,15 +2,19 @@
  * Quota Manager Service
  */
 
+import * as http from 'http';
 import * as https from 'https';
 import {quota_snapshot, quota_group, quota_bucket, quota_summary_response} from '../utils/types';
 import {logger} from '../utils/logger';
 
 export const RECONNECT_REQUIRED = 'RECONNECT_REQUIRED';
 
+export type server_protocol = 'https' | 'http';
+
 export class QuotaManager {
 	private port: number = 0;
 	private csrf_token: string = '';
+	private protocol: server_protocol = 'https';
 
 	private update_callback?: (snapshot: quota_snapshot) => void;
 	private error_callback?: (error: Error) => void;
@@ -20,9 +24,10 @@ export class QuotaManager {
 
 	constructor() {}
 
-	init(port: number, csrf_token: string) {
+	init(port: number, csrf_token: string, protocol: server_protocol = 'https') {
 		this.port = port;
 		this.csrf_token = csrf_token;
+		this.protocol = protocol;
 		this.consecutive_errors = 0;
 	}
 
@@ -42,12 +47,18 @@ export class QuotaManager {
 				},
 				rejectUnauthorized: false,
 				timeout: 5000,
+				agent: false,
 			};
 
-			const req = https.request(options, res => {
+			const transport = this.protocol === 'https' ? https : http;
+			const req = transport.request(options, res => {
 				let body = '';
 				res.on('data', chunk => (body += chunk));
 				res.on('end', () => {
+					if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
+						reject(new Error(`HTTP ${res.statusCode}`));
+						return;
+					}
 					try {
 						resolve(JSON.parse(body) as T);
 					} catch {

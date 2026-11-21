@@ -3,9 +3,15 @@ import {logger} from '../utils/logger';
 export interface process_match {
 	pid: number;
 	extension_port: number;
+	/**
+	 * CSRF token from the command line. Empty for `agy --hub` builds that publish the
+	 * token in their daemon discovery file instead; ProcessFinder fills it in from there.
+	 */
 	csrf_token: string;
-	/** Ports hinted by the command line (e.g. --hub-port [+2]); used when the OS port lookup fails. */
+	/** Ports hinted by the command line (e.g. --hub-port); used when the OS port lookup fails. */
 	hint_ports: number[];
+	/** Full command line, needed to locate the matching hub discovery file. */
+	command_line: string;
 }
 
 export interface platform_strategy {
@@ -30,6 +36,50 @@ function extract_hint_ports(command_line: string): number[] {
 	}
 
 	return ports;
+}
+
+/**
+ * `agy --hub` runs without --csrf_token on recent builds; the token lives in the
+ * daemon discovery file instead (see hub_discovery.ts).
+ */
+function is_hub_command_line(command_line: string): boolean {
+	return /(?:^|\s)--hub(?=\s|$)/i.test(command_line) || /--hub[-_]port[=\s]+\d+/i.test(command_line);
+}
+
+/**
+ * Build a match from a pid + command line. Token-less hub processes are kept so
+ * ProcessFinder can resolve their token from the discovery file; anything else
+ * without a token cannot authenticate and is dropped.
+ */
+function build_match(pid: number, command_line: string, strategy_name: string): process_match | null {
+	if (!pid || isNaN(pid)) {
+		return null;
+	}
+
+	const is_hub = is_hub_command_line(command_line);
+	const hint_ports = extract_hint_ports(command_line);
+	const token_match = command_line.match(/--csrf_token[=\s]+([a-zA-Z0-9\-]+)/);
+	const csrf_token = token_match?.[1] ?? '';
+
+	if (!csrf_token && !is_hub) {
+		logger.debug(strategy_name, `PID ${pid} has no CSRF token, skipping`);
+		return null;
+	}
+
+	if (!csrf_token) {
+		logger.debug(
+			strategy_name,
+			`PID ${pid} is an agy hub without a command-line CSRF token; will read it from the daemon discovery file`
+		);
+	}
+
+	return {
+		pid,
+		extension_port: hint_ports.length > 0 ? hint_ports[0] : 0,
+		csrf_token,
+		hint_ports,
+		command_line,
+	};
 }
 
 export class WindowsStrategy implements platform_strategy {
@@ -115,52 +165,31 @@ export class WindowsStrategy implements platform_strategy {
 						return null;
 					}
 
-					if (total_count > 1) {
-						logger.info(
-							'WindowsStrategy',
-							`Selected Antigravity process PID: ${antigravity_processes[0].ProcessId} (first match of ${antigravity_processes.length})`
-						);
-					}
-					data = antigravity_processes[0];
-				} else {
-					logger.debug('WindowsStrategy', `JSON is a single object (PID: ${data.ProcessId})`);
-					logger.debug('WindowsStrategy', `CommandLine: ${data.CommandLine ? data.CommandLine.substring(0, 200) + '...' : '(empty)'}`);
-
-					if (!data.CommandLine || !this.is_antigravity_process(data.CommandLine)) {
-						logger.warn('WindowsStrategy', `Single process found but not Antigravity, skipping`);
+					const match = this.pick_candidate(antigravity_processes);
+					if (!match) {
 						return null;
 					}
-					logger.info('WindowsStrategy', `Found 1 Antigravity process, PID: ${data.ProcessId}`);
+					logger.info('WindowsStrategy', `Selected Antigravity process PID: ${match.pid}`);
+					return match;
 				}
 
-				const command_line = data.CommandLine || '';
-				const pid = data.ProcessId;
+				logger.debug('WindowsStrategy', `JSON is a single object (PID: ${data.ProcessId})`);
+				logger.debug('WindowsStrategy', `CommandLine: ${data.CommandLine ? data.CommandLine.substring(0, 200) + '...' : '(empty)'}`);
 
-				if (!pid) {
-					logger.error('WindowsStrategy', `No PID found in process data`);
+				if (!data.CommandLine || !this.is_antigravity_process(data.CommandLine)) {
+					logger.warn('WindowsStrategy', `Single process found but not Antigravity, skipping`);
 					return null;
 				}
 
-				const hint_ports = extract_hint_ports(command_line);
-				const token_match = command_line.match(/--csrf_token[=\s]+([a-zA-Z0-9\-]+)/);
-
-				logger.debug(
-					'WindowsStrategy',
-					`Regex matches: hint_ports=[${hint_ports.join(', ')}], csrf_token=${token_match ? 'FOUND' : 'NOT FOUND'}`
-				);
-
-				if (!token_match || !token_match[1]) {
-					logger.error('WindowsStrategy', `CSRF token not found in command line`);
-					logger.debug('WindowsStrategy', `Full command line: ${command_line}`);
+				const match = build_match(data.ProcessId, data.CommandLine, 'WindowsStrategy');
+				if (!match) {
+					logger.warn('WindowsStrategy', `CSRF token not found in command line`);
+					logger.debug('WindowsStrategy', `Full command line: ${data.CommandLine}`);
 					return null;
 				}
 
-				const extension_port = hint_ports.length > 0 ? hint_ports[0] : 0;
-				const csrf_token = token_match[1];
-
-				logger.debug('WindowsStrategy', `Extracted: PID=${pid}, extension_port=${extension_port}, csrf_token=${csrf_token.substring(0, 8)}...`);
-
-				return {pid, extension_port, csrf_token, hint_ports};
+				logger.info('WindowsStrategy', `Found 1 Antigravity process, PID: ${match.pid}`);
+				return match;
 			} catch (e: any) {
 				logger.error('WindowsStrategy', `JSON parse error: ${e.message}`);
 				logger.debug('WindowsStrategy', `Raw stdout (first 500 chars): ${stdout.substring(0, 500)}`);
@@ -170,7 +199,7 @@ export class WindowsStrategy implements platform_strategy {
 
 		logger.debug('WindowsStrategy', `Fallback: Processing WMIC output with ${blocks.length} block(s)`);
 
-		const candidates: process_match[] = [];
+		const candidates: {pid: number; command_line: string}[] = [];
 
 		for (const block of blocks) {
 			const pid_match = block.match(/ProcessId=(\d+)/);
@@ -188,20 +217,7 @@ export class WindowsStrategy implements platform_strategy {
 				continue;
 			}
 
-			const hint_ports = extract_hint_ports(command_line);
-			const token_match = command_line.match(/--csrf_token[=\s]+([a-zA-Z0-9\-]+)/);
-
-			if (!token_match || !token_match[1]) {
-				logger.debug('WindowsStrategy', `WMIC: PID ${pid_match[1]} has no CSRF token, skipping`);
-				continue;
-			}
-
-			const pid = parseInt(pid_match[1], 10);
-			const extension_port = hint_ports.length > 0 ? hint_ports[0] : 0;
-			const csrf_token = token_match[1];
-
-			logger.debug('WindowsStrategy', `WMIC: Found candidate PID=${pid}, extension_port=${extension_port}`);
-			candidates.push({pid, extension_port, csrf_token, hint_ports});
+			candidates.push({pid: parseInt(pid_match[1], 10), command_line});
 		}
 
 		if (candidates.length === 0) {
@@ -209,8 +225,40 @@ export class WindowsStrategy implements platform_strategy {
 			return null;
 		}
 
-		logger.info('WindowsStrategy', `WMIC: Found ${candidates.length} Antigravity process(es), using PID: ${candidates[0].pid}`);
-		return candidates[0];
+		const match = this.pick_candidate(candidates);
+		if (!match) {
+			logger.warn('WindowsStrategy', `WMIC: No usable Antigravity process found`);
+			return null;
+		}
+
+		logger.info('WindowsStrategy', `WMIC: Found ${candidates.length} Antigravity process(es), using PID: ${match.pid}`);
+		return match;
+	}
+
+	/**
+	 * Prefer a process whose CSRF token is already on the command line, then fall back
+	 * to a token-less hub process (its token comes from the discovery file).
+	 */
+	private pick_candidate(items: {ProcessId?: number; ProcessID?: number; pid?: number; CommandLine?: string; command_line?: string}[]): process_match | null {
+		const matches: process_match[] = [];
+
+		for (const item of items) {
+			const pid = item.ProcessId ?? item.ProcessID ?? item.pid;
+			const command_line = item.CommandLine ?? item.command_line ?? '';
+			if (!pid || !command_line) {
+				continue;
+			}
+			const match = build_match(pid, command_line, 'WindowsStrategy');
+			if (match) {
+				matches.push(match);
+			}
+		}
+
+		if (matches.length === 0) {
+			return null;
+		}
+
+		return matches.find(m => m.csrf_token.length > 0) ?? matches[0];
 	}
 
 	get_port_list_command(pid: number): string {
@@ -326,7 +374,14 @@ export class UnixStrategy implements platform_strategy {
 
 			const cmd = line.substring(parts[0].length).trim();
 
-			if (!cmd.includes('--hub-port') && !cmd.includes('--hub_port')) {
+			// `agy --hub` always carries one of these; the hub may omit --hub-port when it
+			// publishes the port only in its discovery file.
+			if (
+				!cmd.includes('--hub') &&
+				!cmd.includes('--hub-port') &&
+				!cmd.includes('--hub_port') &&
+				!cmd.includes('--csrf_token')
+			) {
 				continue;
 			}
 
@@ -334,20 +389,10 @@ export class UnixStrategy implements platform_strategy {
 				continue;
 			}
 
-			const hint_ports = extract_hint_ports(cmd);
-			const token_match = cmd.match(/--csrf_token[=\s]+([a-zA-Z0-9\-]+)/);
-
-			if (!token_match?.[1]) {
-				logger.debug('UnixStrategy', `PID ${pid} has no CSRF token, skipping`);
-				continue;
+			const match = build_match(pid, cmd, 'UnixStrategy');
+			if (match) {
+				candidates.push(match);
 			}
-
-			candidates.push({
-				pid,
-				extension_port: hint_ports.length > 0 ? hint_ports[0] : 0,
-				csrf_token: token_match[1],
-				hint_ports,
-			});
 		}
 
 		if (candidates.length === 0) {
@@ -355,13 +400,15 @@ export class UnixStrategy implements platform_strategy {
 			return null;
 		}
 
+		const selected = candidates.find(c => c.csrf_token.length > 0) ?? candidates[0];
+
 		if (candidates.length > 1) {
-			logger.info('UnixStrategy', `Found ${candidates.length} Antigravity process(es), using PID: ${candidates[0].pid}`);
+			logger.info('UnixStrategy', `Found ${candidates.length} Antigravity process(es), using PID: ${selected.pid}`);
 		} else {
-			logger.info('UnixStrategy', `Found 1 Antigravity process, PID: ${candidates[0].pid}`);
+			logger.info('UnixStrategy', `Found 1 Antigravity process, PID: ${selected.pid}`);
 		}
 
-		return candidates[0];
+		return selected;
 	}
 
 	get_port_list_command(pid: number): string {

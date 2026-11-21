@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 1.0.7 (2026-11-22)
+
+### 修复
+
+- **修复 macOS（及部分新版 Windows/Linux 构建）上始终提示「Antigravity process not found」的问题**：新版 `agy --hub` 不再把 `--csrf_token` 放在命令行，而是写入 `~/.gemini/<app_data_dir>/daemon/hub_<hub_port>.json`（含 `csrfToken`、`httpsPort`、`httpPort`、`lsVersion`）。原逻辑把「命令行没有 token」直接判定为非目标进程并丢弃，导致进程明明在运行却检测失败
+- 新增 `hub_discovery.ts`：按 `--app_data_dir` + `--hub-port` 定位发现文件，并以 PID 校验避免读到上一次会话的残留文件；`--hub-port` 缺失时按 PID 在 `daemon/` 目录中匹配
+- 端口探测改为 HTTPS → HTTP 自适应：`agy` 的 `httpsPort` 提供 TLS 接口，`--hub-port` 为明文 Connect-RPC，探测顺序为「发现文件的 httpsPort → 系统端口 → 命令行的 hub-port → 发现文件的 httpPort」，协商结果一路传给 `QuotaManager`
+- 进程扫描全部落空时，新增按发现文件兜底的连接路径，二进制再次改名也不会彻底失效
+- 多个候选进程时，优先选择命令行已自带 token 的那个
+
+### 说明
+
+- 旧的 `language_server_*` + `--csrf_token` 形态行为不变；无 `--hub` 标记且无 token 的进程仍会被正确跳过
+- Windows（PowerShell / WMIC）与 Linux 复用同一套解析与探测逻辑
+
 ## 1.0.6 (2026-11-21)
 
 ### 修复与清理

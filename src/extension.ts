@@ -217,12 +217,13 @@ async function initialize_extension(max_attempts: number = INIT_MAX_ATTEMPTS, up
 			logger.info('Extension', 'Process found successfully', {
 				extension_port: process_info.extension_port,
 				connect_port: process_info.connect_port,
+				protocol: process_info.protocol,
 				csrf_token: process_info.csrf_token.substring(0, 8) + '...',
 			});
 
 			stop_background_retry();
 			has_shown_not_found_error = false;
-			quota_manager.init(process_info.connect_port, process_info.csrf_token);
+			quota_manager.init(process_info.connect_port, process_info.csrf_token, process_info.protocol);
 
 			if (config.enabled) {
 				logger.debug('Extension', `Starting polling with interval: ${config.polling_interval}ms`);
