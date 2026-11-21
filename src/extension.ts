@@ -235,7 +235,7 @@ async function initialize_extension(max_attempts: number = INIT_MAX_ATTEMPTS, up
 				logger.error('Extension', 'Antigravity process not found');
 				logger.info('Extension', 'Troubleshooting tips:');
 				logger.info('Extension', '   1. Make sure Antigravity extension is installed and enabled');
-				logger.info('Extension', '   2. Check if the language_server or agy process is running');
+				logger.info('Extension', '   2. Check if the agy process is running');
 				logger.info('Extension', '   3. Try reloading VS Code');
 				logger.info('Extension', '   4. Open "Output" panel and select "AGY Quota" for detailed logs');
 

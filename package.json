@@ -2,7 +2,7 @@
   "name": "antigravity-quota-plus",
   "displayName": "AGY Quota",
   "description": "Monitor dual AI model quotas (5-Hour & Weekly limits) for Antigravity in the status bar",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "publisher": "Doer",
   "icon": "assets/AgyQuota.png",
   "engines": {

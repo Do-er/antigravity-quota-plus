@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 1.0.6 (2026-11-21)
+
+### 修复与清理
+
+- 修复端口健康检查失效问题：将探测接口从已下线的 `GetUnleashData` 替换为 `RetrieveUserQuotaSummary`
+- 移除已过时的旧版 `language_server_*` 进程及 `--extension_server_port` / `hub_port + 2` 兼容逻辑，仅保留 `agy` / `agy.exe`
+
 ## 1.0.5 (2026-11-20)
 
 ### 优化与修复

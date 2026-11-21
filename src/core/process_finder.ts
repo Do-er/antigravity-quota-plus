@@ -29,17 +29,13 @@ export class ProcessFinder {
 
 		if (process.platform === 'win32') {
 			this.strategy = new WindowsStrategy();
-			this.process_names = [
-				`language_server_windows_${process.arch === 'arm64' ? 'arm' : 'x64'}.exe`,
-				// Antigravity 2.x replaced the bundled language server with the agy hub.
-				'agy.exe',
-			];
+			this.process_names = ['agy.exe'];
 		} else if (process.platform === 'darwin') {
 			this.strategy = new UnixStrategy('darwin');
-			this.process_names = [`language_server_macos${process.arch === 'arm64' ? '_arm' : ''}`, 'agy'];
+			this.process_names = ['agy'];
 		} else {
 			this.strategy = new UnixStrategy('linux');
-			this.process_names = [`language_server_linux${process.arch === 'arm64' ? '_arm' : '_x64'}`, 'agy'];
+			this.process_names = ['agy'];
 		}
 
 		logger.info(LOG_CAT, `Target process names: ${this.process_names.join(', ')}`);
@@ -205,13 +201,21 @@ export class ProcessFinder {
 
 	private test_port(port: number, csrf_token: string): Promise<boolean> {
 		return new Promise(resolve => {
+			const payload = JSON.stringify({
+				metadata: {
+					ideName: 'antigravity',
+					extensionName: 'antigravity',
+					locale: 'en',
+				},
+			});
 			const options = {
 				hostname: '127.0.0.1',
 				port,
-				path: '/exa.language_server_pb.LanguageServerService/GetUnleashData',
+				path: '/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary',
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
+					'Content-Length': Buffer.byteLength(payload),
 					'X-Codeium-Csrf-Token': csrf_token,
 					'Connect-Protocol-Version': '1',
 				},
@@ -252,7 +256,7 @@ export class ProcessFinder {
 				resolve(false);
 			});
 
-			req.write(JSON.stringify({wrapper_data: {}}));
+			req.write(payload);
 			req.end();
 		});
 	}

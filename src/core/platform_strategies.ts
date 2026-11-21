@@ -19,23 +19,14 @@ export interface platform_strategy {
 }
 
 /**
- * Extract the ports the language-server API may listen on from its command line.
- * Older builds pass --extension_server_port; the agy hub passes --hub-port and
- * serves the same APIs on hub_port + 2.
+ * Extract the --hub-port from the agy hub command line.
  */
 function extract_hint_ports(command_line: string): number[] {
 	const ports: number[] = [];
 
 	const hub_match = command_line.match(/--hub[-_]port[=\s]+(\d+)/);
 	if (hub_match) {
-		const hub_port = parseInt(hub_match[1], 10);
-		// hub_port + 2 serves the language-server APIs; hub_port itself is the CLI hub.
-		ports.push(hub_port + 2, hub_port);
-	}
-
-	const ext_match = command_line.match(/--extension_server_port[=\s]+(\d+)/);
-	if (ext_match) {
-		ports.push(parseInt(ext_match[1], 10));
+		ports.push(parseInt(hub_match[1], 10));
 	}
 
 	return ports;
@@ -102,7 +93,7 @@ export class WindowsStrategy implements platform_strategy {
 					logger.debug('WindowsStrategy', `JSON is an array with ${data.length} element(s)`);
 
 					if (data.length === 0) {
-						logger.warn('WindowsStrategy', `Empty process array - no language_server processes found`);
+						logger.warn('WindowsStrategy', `Empty process array - no agy processes found`);
 						return null;
 					}
 
@@ -116,10 +107,10 @@ export class WindowsStrategy implements platform_strategy {
 
 					const antigravity_processes = data.filter((item: any) => item.CommandLine && this.is_antigravity_process(item.CommandLine));
 
-					logger.info('WindowsStrategy', `Found ${total_count} language_server process(es), ${antigravity_processes.length} belong to Antigravity`);
+					logger.info('WindowsStrategy', `Found ${total_count} agy process(es), ${antigravity_processes.length} belong to Antigravity`);
 
 					if (antigravity_processes.length === 0) {
-						logger.warn('WindowsStrategy', `No Antigravity process found among ${total_count} language_server process(es)`);
+						logger.warn('WindowsStrategy', `No Antigravity process found among ${total_count} agy process(es)`);
 						logger.debug('WindowsStrategy', `Hint: Looking for processes with '--app_data_dir antigravity' or '\\antigravity\\' in path`);
 						return null;
 					}
@@ -264,13 +255,13 @@ export class WindowsStrategy implements platform_strategy {
 
 	get_error_messages() {
 		return {
-			process_not_found: this.use_powershell ? 'language_server process not found' : 'language_server process not found',
+			process_not_found: 'agy process not found',
 			command_not_available: this.use_powershell
 				? 'PowerShell command failed; please check system permissions'
 				: 'wmic/PowerShell command unavailable; please check the system environment',
 			requirements: [
 				'Antigravity is running',
-				'language_server_windows_x64.exe or agy.exe process is running',
+				'agy.exe process is running',
 				this.use_powershell
 					? 'The system has permission to run PowerShell commands (Get-CimInstance, Get-NetTCPConnection)'
 					: 'The system has permission to run wmic/PowerShell and netstat commands (auto-fallback supported)',
@@ -335,8 +326,7 @@ export class UnixStrategy implements platform_strategy {
 
 			const cmd = line.substring(parts[0].length).trim();
 
-			// Older builds always carried --extension_server_port; agy carries --hub-port.
-			if (!cmd.includes('--extension_server_port') && !cmd.includes('--hub-port') && !cmd.includes('--hub_port')) {
+			if (!cmd.includes('--hub-port') && !cmd.includes('--hub_port')) {
 				continue;
 			}
 
@@ -361,7 +351,7 @@ export class UnixStrategy implements platform_strategy {
 		}
 
 		if (candidates.length === 0) {
-			logger.warn('UnixStrategy', 'No Antigravity language_server process found');
+			logger.warn('UnixStrategy', 'No Antigravity agy process found');
 			return null;
 		}
 
