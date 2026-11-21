@@ -91,6 +91,12 @@ npm run compile
 
 # 打包为 VSIX 安装包
 npm run node:vsix:package
+
+# 一键打包并发布到 Open VSX（需先在 .env 中配置 OVSX_PAT=你的Access Tokens）
+npm run publish:ovsx
+
+# 一键打包并发布到 Open VSX（需先在 .env 中配置 OVSX_PAT=你的Token）
+npm run publish:ovsx
 ```
 
 ---

@@ -60,6 +60,7 @@
   },
   "scripts": {
     "node:vsix:package": "npm run compile && npx vsce package --baseImagesUrl https://raw.githubusercontent.com/Do-er/antigravity-quota-plus/main --baseContentUrl https://github.com/Do-er/antigravity-quota-plus/blob/main --no-git-tag-version",
+    "publish:ovsx": "bash scripts/publish-ovsx.sh",
     "bunx:vsix:package": "bun run compile && bunx vsce package --no-dependencies",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
