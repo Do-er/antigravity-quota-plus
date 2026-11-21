@@ -56,25 +56,16 @@ export class ProcessFinder {
 				const cmd = this.strategy.get_process_list_command(this.process_names);
 				logger.debug(LOG_CAT, `Executing process list command:\n${cmd}`);
 
-				const {stdout, stderr} = await exec_async(cmd);
-
-				if (stderr) {
-					logger.warn(LOG_CAT, `Command stderr output: ${stderr}`);
-				}
-
-				logger.debug(LOG_CAT, `Raw stdout (${stdout.length} chars):\n${stdout}`);
-
-				let info = this.strategy.parse_process_info(stdout);
+				const {stdout} = await this.exec_search_command(cmd, 'process list');
+				let info = stdout ? this.strategy.parse_process_info(stdout) : null;
 
 				if (!info) {
 					logger.debug(LOG_CAT, `Name match found nothing usable, trying command-line search...`);
 					const fallback_cmd = this.strategy.get_commandline_search_command();
 					logger.debug(LOG_CAT, `Executing command-line search:\n${fallback_cmd}`);
 
-					const fallback = await exec_async(fallback_cmd);
-					logger.debug(LOG_CAT, `Command-line search stdout (${fallback.stdout.length} chars):\n${fallback.stdout}`);
-
-					info = this.strategy.parse_process_info(fallback.stdout);
+					const fallback = await this.exec_search_command(fallback_cmd, 'command-line search');
+					info = fallback.stdout ? this.strategy.parse_process_info(fallback.stdout) : null;
 				}
 
 				if (info) {
@@ -132,6 +123,31 @@ export class ProcessFinder {
 		logger.error(LOG_CAT, `Process detection failed after ${max_retries} attempt(s)`);
 		timer();
 		return null;
+	}
+
+	/**
+	 * Execute a process discovery shell command, treating non-zero exit codes
+	 * (such as pgrep/grep returning 1 when no process matches) as empty output
+	 * so fallback search strategies can still run.
+	 */
+	private async exec_search_command(cmd: string, label: string): Promise<{stdout: string; stderr: string}> {
+		try {
+			const {stdout, stderr} = await exec_async(cmd);
+			if (stderr) {
+				logger.warn(LOG_CAT, `${label} stderr output: ${stderr}`);
+			}
+			logger.debug(LOG_CAT, `${label} stdout (${stdout.length} chars):\n${stdout}`);
+			return {stdout, stderr};
+		} catch (e: any) {
+			// pgrep/grep exit with code 1 when nothing matches; still preserve any partial stdout.
+			const stdout = typeof e.stdout === 'string' ? e.stdout : '';
+			const stderr = typeof e.stderr === 'string' ? e.stderr : '';
+			logger.debug(LOG_CAT, `${label} command exited with code ${e.code}: ${e.message}`);
+			if (stderr) {
+				logger.debug(LOG_CAT, `${label} stderr: ${stderr}`);
+			}
+			return {stdout, stderr};
+		}
 	}
 
 	private async get_listening_ports(pid: number, hint_ports: number[] = []): Promise<number[]> {
