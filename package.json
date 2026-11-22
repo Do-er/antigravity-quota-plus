@@ -1,14 +1,20 @@
 {
   "name": "antigravity-quota-plus",
-  "displayName": "AGY Quota",
-  "description": "Monitor dual AI model quotas (5-Hour & Weekly limits) for Antigravity in the status bar",
-  "version": "1.0.7",
+  "displayName": "Antigravity Quota (AGY)",
+  "description": "Monitor Antigravity AI quotas, usage & rate limits (5h & 7d countdowns) for Gemini, Claude, GPT, and Gemini 4 Argon in the status bar",
+  "version": "1.0.8",
   "publisher": "Doer",
   "icon": "assets/AgyQuota.png",
+  "galleryBanner": {
+    "color": "#111827",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
   "categories": [
+    "AI",
+    "Visualization",
     "Other"
   ],
   "activationEvents": [
@@ -87,7 +93,9 @@
   "keywords": [
     "antigravity",
     "quota",
-    "ai"
+    "gemini",
+    "claude",
+    "status bar"
   ],
   "author": "Doer",
   "license": "MIT"

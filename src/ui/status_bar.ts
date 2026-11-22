@@ -79,20 +79,30 @@ export class StatusBarManager {
 			? snapshot.groups.filter(g => g.buckets.some(b => pinned.includes(b.bucket_id)))
 			: snapshot.groups;
 
-		const sections: string[] = [];
-		for (const group of visible_groups) {
-			const group_prefix = this.get_group_prefix(group.display_name);
-			const lines = [`| ${group_prefix} **${group.display_name}** | |`, '| :--- | ---: |'];
+		// Single-table layout (empty header row required by GFM) with 2 columns:
+		// left = window + progress bar + countdown, right = percentage.
+		if (visible_groups.length > 0) {
+			const table_lines = [
+				'|  |  |',
+				'| :--- | ---: |',
+			];
 
-			for (const b of this.sort_buckets(group.buckets)) {
-				const label = this.format_window_label(b.window);
-				const pct = b.remaining_percentage !== undefined ? `${b.remaining_percentage.toFixed(1)}%` : 'N/A';
-				lines.push(`| ${label} **${pct}** | ${b.reset_countdown} |`);
+			for (const group of visible_groups) {
+				const group_prefix = this.get_group_prefix(group.display_name);
+				const group_title = group.display_name.replace(/\bmodels\b/i, 'Models');
+				table_lines.push(`| **${group_prefix} ${group_title}** | |`);
+
+				for (const b of this.sort_buckets(group.buckets)) {
+					const label = this.format_window_label(b.window);
+					const pct = b.remaining_percentage;
+					const bar = pct !== undefined ? this.draw_progress_bar(pct) : '○'.repeat(10);
+					const pct_text = pct !== undefined ? `${pct.toFixed(1)}%` : 'N/A';
+					table_lines.push(`| **${label}** \`${bar}\` ${b.reset_countdown} | **${pct_text}** |`);
+				}
 			}
-			sections.push(lines.join('\n'));
-		}
 
-		md.appendMarkdown(sections.join('\n\n'));
+			md.appendMarkdown(table_lines.join('\n'));
+		}
 		this.item.tooltip = md;
 
 		this.item.show();
@@ -174,7 +184,7 @@ export class StatusBarManager {
 				for (const b of this.sort_buckets(group.buckets)) {
 					const pct = b.remaining_percentage;
 					const pct_display = pct !== undefined ? `${pct.toFixed(1)}%` : 'N/A';
-					const bar = pct !== undefined ? this.draw_progress_bar(pct) : '░'.repeat(10);
+					const bar = pct !== undefined ? this.draw_progress_bar(pct) : '○'.repeat(10);
 					const is_pinned = pinned.length > 0 ? pinned.includes(b.bucket_id) : true;
 
 					const symbol = is_pinned ? '▣' : '▢';
@@ -204,11 +214,17 @@ export class StatusBarManager {
 		const total = 10;
 		const filled = Math.round((Math.max(0, Math.min(100, percentage)) / 100) * total);
 		const empty = total - filled;
-		return '▓'.repeat(filled) + '░'.repeat(empty);
+		return '●'.repeat(filled) + '○'.repeat(empty);
 	}
 
 	private get_group_prefix(display_name: string): string {
-		return display_name.toLowerCase().includes('gemini') ? '✦' : '✺';
+		const name = display_name.toLowerCase();
+		// Gemini 4 Argon is a separate premium Gemini tier — give it its own mark
+		// so it doesn't look identical to the regular "Gemini Models" group.
+		if (name.includes('argon')) {
+			return '✦✦';
+		}
+		return name.includes('gemini') ? '✦' : '✺';
 	}
 
 	private sort_buckets(buckets: quota_bucket[]): quota_bucket[] {
@@ -217,8 +233,8 @@ export class StatusBarManager {
 	}
 
 	private format_window_label(win: string): string {
-		if (win === 'weekly') return '周';
-		if (win === '5h') return '5H';
+		if (win === 'weekly') return '7d';
+		if (win === '5h') return '5h';
 		return win || 'Other';
 	}
 
